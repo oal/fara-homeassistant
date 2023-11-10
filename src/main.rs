@@ -37,18 +37,19 @@ struct TokenResponse {
 }
 
 #[derive(Deserialize)]
-struct TravelCard {
+struct FaraTravelCard {
     #[serde(rename = "cardNo")]
     card_no: String,
+    description: String,
 }
 
 #[derive(Deserialize)]
 struct TravelCardResponse {
-    cards: Vec<TravelCard>,
+    cards: Vec<FaraTravelCard>,
 }
 
-#[derive(Deserialize, Serialize)]
-struct TravelProduct {
+#[derive(Debug, Deserialize, Serialize)]
+struct FaraTravelProduct {
     status: Option<String>,
 
     #[serde(rename = "productType")]
@@ -61,10 +62,13 @@ struct TravelProduct {
     #[serde(rename = "endValidity")]
     end_validity: Option<NaiveDate>,
 
-    #[serde(rename = "unitsLeft")]
-    units_left: Option<isize>,
+    #[serde(default, rename = "unitsLeft")]
+    units_left: isize,
 
-    balance: Option<isize>,
+    #[serde(default)]
+    balance: isize,
+
+    currency: Option<String>,
 }
 
 struct FaraClient {
@@ -73,6 +77,52 @@ struct FaraClient {
     client: reqwest::Client,
 
     token: Option<String>,
+}
+
+#[derive(Debug)]
+enum Product {
+    Punch {
+        name: String,
+        units_left: isize,
+    },
+    Period {
+        name: String,
+        start: NaiveDate,
+        end: NaiveDate,
+    },
+    Purse {
+        name: String,
+        balance: isize,
+    },
+}
+
+#[derive(Debug)]
+struct Card {
+    id: String,
+    name: String,
+    products: Vec<Product>,
+}
+
+impl Product {
+    fn from_fara_product(fara_product: &FaraTravelProduct) -> Option<Self> {
+        let name = fara_product.template_name.clone();
+        match fara_product.product_type.as_str() {
+            "PUNCH" => Some(Product::Punch {
+                name: name?,
+                units_left: fara_product.units_left,
+            }),
+            "PERIOD" => Some(Product::Period {
+                name: name?,
+                start: fara_product.start_validity?,
+                end: fara_product.end_validity?,
+            }),
+            "PURSE" => Some(Product::Purse {
+                name: fara_product.currency.clone()?,
+                balance: fara_product.balance,
+            }),
+            _ => None,
+        }
+    }
 }
 
 
@@ -109,17 +159,8 @@ impl FaraClient {
         let authorization = format!("{}:password", self.client_id);
         let authorization = general_purpose::STANDARD.encode(&authorization);
         let request = self.client.post(TOKEN_URL)
-            // .body(&token_request);
-            // .query(&token_request)
             .header("Authorization", format!("Basic {}", authorization))
             .form(&token_request);
-        // .build()?;
-
-
-        // let mut s = String::new();
-        // request.body().unwrap().as_bytes().unwrap().read_to_string(&mut s).unwrap();
-        // println!("Sending request: {:?}", s);
-        // return Ok("".to_string());
 
         let response = request
             .send()
@@ -128,11 +169,10 @@ impl FaraClient {
         let token_response = response.json::<TokenResponse>().await?;
         let token = token_response.access_token.clone();
         self.token = Some(token.clone());
-        println!("Got token: {}", token);
         Ok(token)
     }
 
-    pub async fn get_travelcards(&self, username: String) -> anyhow::Result<Vec<TravelCard>> {
+    pub async fn get_travelcards(&self, username: String) -> anyhow::Result<Vec<Card>> {
         let url = self.url(&format!("users/{username}/travelcards"));
 
         let response = self.client
@@ -141,20 +181,27 @@ impl FaraClient {
             .send().await?
             .json::<TravelCardResponse>().await?;
 
-        return Ok(response.cards);
+        return Ok(response.cards.iter().map(|c| Card {
+            id: c.card_no.clone(),
+            name: c.description.clone(),
+            products: Vec::new(),
+        }).collect::<Vec<_>>());
     }
 
-    pub async fn get_travelcard_products(&self, username: String, travelcard_id: String) {
+    pub async fn get_travelcard_products(&self, username: String, travelcard_id: String) -> anyhow::Result<Vec<Product>> {
         let url = self.url(&format!("users/{username}/travelcard/{travelcard_id}/products"));
 
         let response = self.client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.token.clone().unwrap()))
-            .send().await
-            .unwrap()
-            .json::<Vec<TravelProduct>>().await.unwrap();
+            .send().await?;
 
-        println!("Got travelcard products: {:?}", serde_json::to_string(&response));
+        let response = response
+            .json::<Vec<FaraTravelProduct>>().await?;
+
+        Ok(response.iter()
+            .filter_map(|p| Product::from_fara_product(p))
+            .collect::<Vec<_>>())
     }
 }
 
@@ -164,14 +211,17 @@ async fn main() {
     dotenv().expect("Failed to read .env file");
     let username = std::env::var("FARA_USERNAME").expect("FARA_USERNAME not set");
     let password = std::env::var("FARA_PASSWORD").expect("FARA_PASSWORD not set");
+    let pta = std::env::var("FARA_PTA").expect("FARA_PTA not set");
+    let client_id = std::env::var("FARA_CLIENT_ID").expect("FARA_CLIENT_ID not set");
 
-    let mut client = FaraClient::new("AKT", "webshop_akt");
-    let token = client.get_token(username.clone(), password).await.unwrap();
-    let travelcards = client.get_travelcards(username.clone()).await.unwrap();
+    let mut client = FaraClient::new(&pta, &client_id);
+    client.get_token(username.clone(), password).await.unwrap();
 
-    for travelcard in travelcards {
-        println!("Travelcard: {}", travelcard.card_no);
-        client.get_travelcard_products(username.clone(), travelcard.card_no).await;
-    }
-    // println!("Hello, world! {}", travelcards.len());
+    let mut travel_cards = client.get_travelcards(username.clone()).await.unwrap();
+    for travel_card in &mut travel_cards {
+        let products = client.get_travelcard_products(username.clone(), travel_card.id.clone()).await;
+        travel_card.products = products.unwrap();
+    };
+
+    println!("Cards: {:?}", travel_cards);
 }
