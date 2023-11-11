@@ -1,9 +1,9 @@
 use dotenvy::dotenv;
-use crate::fara_api::{FaraClient};
+use crate::fara::{FaraClient};
 use crate::models::Card;
 
 mod models;
-mod fara_api;
+mod fara;
 
 struct AppConfig {
     username: String,
