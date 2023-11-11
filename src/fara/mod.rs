@@ -1,6 +1,6 @@
 use base64::{Engine as _, engine::general_purpose};
 use crate::fara::models::{FaraTravelProduct, TokenRequest, TokenResponse, TravelCardResponse};
-use crate::models::{Card, Product};
+use crate::models::{Card, CardWithProducts, Product};
 
 mod models;
 
@@ -57,7 +57,7 @@ impl FaraClient {
         Ok(token)
     }
 
-    pub async fn get_travelcards(&self, username: String) -> anyhow::Result<Vec<Card>> {
+    pub async fn get_travelcards(&self, username: String) -> anyhow::Result<Vec<CardWithProducts>> {
         let url = self.url(&format!("users/{username}/travelcards"));
 
         let response = self.client
@@ -66,9 +66,11 @@ impl FaraClient {
             .send().await?
             .json::<TravelCardResponse>().await?;
 
-        return Ok(response.cards.iter().map(|c| Card {
-            id: c.card_no.clone(),
-            name: c.description.clone(),
+        return Ok(response.cards.iter().map(|c| CardWithProducts {
+            card: Card {
+                id: c.card_no.clone(),
+                name: c.description.clone(),
+            },
             products: Vec::new(),
         }).collect::<Vec<_>>());
     }
