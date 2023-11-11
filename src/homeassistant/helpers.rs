@@ -1,6 +1,6 @@
 use chrono::{NaiveTime, TimeZone};
 use crate::homeassistant::{INTEGRATION_IDENTIFIER, INTEGRATION_NAME};
-use crate::homeassistant::models::{ConfigMessage, Device, StateMessage};
+use crate::homeassistant::models::{ConfigMessage, Device};
 use crate::models::{Card, Product};
 
 pub(crate) fn identifier(card: &Card, product: &Product) -> String {

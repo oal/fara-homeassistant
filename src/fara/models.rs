@@ -30,9 +30,9 @@ impl TokenRequest {
 #[derive(Deserialize)]
 pub struct TokenResponse {
     pub(crate) access_token: String,
-    token_type: String,
-    expires_in: usize,
-    scope: String,
+    // token_type: String,
+    // expires_in: usize,
+    // scope: String,
 }
 
 #[derive(Deserialize)]
@@ -65,7 +65,7 @@ pub struct FaraTravelProduct {
     units_left: isize,
 
     #[serde(default)]
-    balance: isize,
+    balance: f64,
 
     currency: Option<String>,
 }

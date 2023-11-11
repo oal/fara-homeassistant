@@ -1,6 +1,8 @@
 use chrono::NaiveDate;
+use crate::homeassistant;
+use crate::homeassistant::models::ConfigMessage;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Card {
     pub id: String,
     pub name: String,
@@ -19,7 +21,7 @@ pub enum Product {
     },
     Purse {
         name: String,
-        balance: isize,
+        balance: f64,
     },
 }
 
@@ -45,4 +47,26 @@ impl Product {
 pub struct CardWithProducts {
     pub card: Card,
     pub products: Vec<Product>,
+}
+
+pub struct CardProduct {
+    pub(crate) card: Card,
+    pub(crate) product: Product,
+}
+
+impl CardProduct {
+    pub(crate) fn new(card: Card, product: Product) -> Self {
+        Self {
+            card,
+            product,
+        }
+    }
+
+    pub(crate) fn config_message(&self) -> ConfigMessage {
+        homeassistant::helpers::config_message(&self.card, &self.product)
+    }
+
+    pub(crate) fn state_message(&self) -> Option<String> {
+        homeassistant::helpers::state_message(&self.product)
+    }
 }

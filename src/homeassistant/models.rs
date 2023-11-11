@@ -15,9 +15,3 @@ pub struct ConfigMessage {
     pub(crate) object_id: String,
     pub(crate) device: Device,
 }
-
-#[derive(Serialize)]
-pub enum StateMessage {
-    Amount(isize),
-    Expiration(chrono::DateTime<chrono::Local>)
-}
