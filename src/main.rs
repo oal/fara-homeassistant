@@ -32,11 +32,16 @@ async fn send_to_homeassistant(cards: Vec<CardWithProducts>, config: &AppConfig)
     for card_with_product in cards {
         for product in card_with_product.products {
             let cp = CardProduct::new(card_with_product.card.clone(), product);
-            ha.publish_and_wait(config_topic(&cp.card, &cp.product), cp.config_message()).await?;
+
+            if let Ok(config_message_json) = serde_json::to_string(&cp.config_message()) {
+                ha.publish_and_wait(config_topic(&cp.card, &cp.product), config_message_json).await?;
+            }
 
             tokio::time::sleep(Duration::from_secs(1)).await;
 
-            ha.publish_and_wait(homeassistant::helpers::state_topic(&cp.card, &cp.product), cp.state_message()).await?;
+            if let Some(state_message) = cp.state_message() {
+                ha.publish_and_wait(homeassistant::helpers::state_topic(&cp.card, &cp.product), state_message).await?;
+            }
         }
     }
 

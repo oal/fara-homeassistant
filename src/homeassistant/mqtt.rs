@@ -1,5 +1,4 @@
 use rumqttc::{AsyncClient, MqttOptions, QoS};
-use serde::Serialize;
 
 pub(crate) struct HomeAssistantMQTTClient {
     client: AsyncClient,
@@ -21,9 +20,8 @@ impl HomeAssistantMQTTClient {
         Ok(())
     }
 
-    pub async fn publish_and_wait(&mut self, topic: String, data: impl Serialize) -> anyhow::Result<()> {
-        let serialized = serde_json::to_string(&data)?;
-        self.client.publish(topic, QoS::AtLeastOnce, false, serialized).await?;
+    pub async fn publish_and_wait(&mut self, topic: String, data: String) -> anyhow::Result<()> {
+        self.client.publish(topic, QoS::AtLeastOnce, false, data).await?;
         self.wait_ack().await
     }
 
